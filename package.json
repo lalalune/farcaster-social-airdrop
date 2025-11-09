@@ -1,0 +1,32 @@
+{
+  "name": "farcaster-social-airdrop",
+  "version": "2.0.0",
+  "description": "Find Farcaster users who posted about a token but don't have it yet - perfect for airdrops",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leo5imon/farcaster-scraper"
+  },
+  "keywords": [
+    "react",
+    "cli",
+    "farcaster",
+    "farcaster kit"
+  ],
+  "type": "module",
+  "author": "leo5imon",
+  "homepage": "https://github.com/leo5imon/farcaster-scraper",
+  "license": "ISC",
+  "dependencies": {
+    "@clack/prompts": "^0.7.0",
+    "@neynar/nodejs-sdk": "^3.83.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.4.1",
+    "ethers": "^6.15.0",
+    "yargs": "^17.7.2"
+  }
+}
