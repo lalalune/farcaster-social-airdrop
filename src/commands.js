@@ -234,36 +234,69 @@ export async function sendAirdropHandler(argv) {
     
     for (let i = 0; i < remaining.length; i++) {
       const dist = remaining[i];
+      let txSuccess = false;
       
-      try {
-        console.log(`[${i + 1}/${remaining.length}] Sending to ${dist.address}...`);
-        
-        const tx = await tokenContract.transfer(dist.address, amountPerWallet);
-        console.log(`  ⏳ Transaction sent: ${tx.hash}`);
-        
-        const receipt = await tx.wait();
-        console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
-        
-        successCount++;
-        sentAddresses.add(dist.address);
-        
-        // Save progress every 10 transactions
-        if (successCount % 10 === 0) {
-          fs.writeFileSync(
-            progressFile,
-            JSON.stringify({ sent: Array.from(sentAddresses), timestamp: new Date().toISOString() }),
-            'utf8'
-          );
-          console.log(`  💾 Progress saved (${successCount} sent)\n`);
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          console.log(`[${i + 1}/${remaining.length}] Sending to ${dist.address}...`);
+          
+          const tx = await tokenContract.transfer(dist.address, amountPerWallet);
+          console.log(`  ⏳ Transaction sent: ${tx.hash}`);
+          
+          // Mark as sent immediately to avoid double-sending on retry
+          sentAddresses.add(dist.address);
+          
+          // Wait for confirmation with retry logic
+          let receipt = null;
+          for (let receiptAttempt = 1; receiptAttempt <= 5; receiptAttempt++) {
+            try {
+              receipt = await tx.wait(1); // Wait for 1 confirmation
+              break;
+            } catch (receiptError) {
+              if (receiptAttempt === 5) {
+                // Give up on confirmation but transaction was sent
+                console.log(`  ⚠️  Could not confirm receipt after 5 attempts`);
+                console.log(`  ℹ️  Transaction was sent (${tx.hash}) but couldn't verify`);
+                console.log(`  ℹ️  Check on BaseScan: https://basescan.org/tx/${tx.hash}`);
+                receipt = { blockNumber: 'unknown' }; // Placeholder
+                break;
+              }
+              console.log(`  ⚠️  Receipt polling failed (attempt ${receiptAttempt}/5), retrying...`);
+              await new Promise(resolve => setTimeout(resolve, 3000 * receiptAttempt));
+            }
+          }
+          
+          if (receipt.blockNumber !== 'unknown') {
+            console.log(`  ✓ Confirmed in block ${receipt.blockNumber}`);
+          }
+          
+          successCount++;
+          txSuccess = true;
+          
+          // Save progress every 10 transactions
+          if (successCount % 10 === 0) {
+            fs.writeFileSync(
+              progressFile,
+              JSON.stringify({ sent: Array.from(sentAddresses), timestamp: new Date().toISOString() }),
+              'utf8'
+            );
+            console.log(`  💾 Progress saved (${successCount} sent)\n`);
+          }
+          
+          // Small delay between transactions
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          break; // Success, exit retry loop
+          
+        } catch (error) {
+          if (attempt === 3) {
+            failCount++;
+            console.error(`  ✗ Failed after 3 attempts: ${error.message}`);
+            failures.push({ address: dist.address, error: error.message });
+          } else {
+            console.log(`  ⚠️  Attempt ${attempt} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 5000 * attempt));
+          }
         }
-        
-        // Small delay between transactions
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-      } catch (error) {
-        failCount++;
-        console.error(`  ✗ Failed: ${error.message}`);
-        failures.push({ address: dist.address, error: error.message });
       }
     }
     
